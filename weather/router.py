@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import func
-from sqlalchemy import select, insert
+from sqlalchemy import select, text
 from database import get_async_session
 from weather.models import city, weather
 from weather.schemas import CitySchema, WeatherSchema
@@ -9,22 +9,37 @@ from weather.schemas import CitySchema, WeatherSchema
 router = APIRouter(prefix="", tags=["Weather"])
 
 
-@router.post("/weather/")
-async def add_city(
-    new_city: CitySchema, session: AsyncSession = Depends(get_async_session)
-):
-    stmt = insert(city).values(**new_city.dict())
+@router.post("/weather/{city_name}")
+async def add_city(city_name: str, session: AsyncSession = Depends(get_async_session)):
+    # TODO: добавить проверку, что город есть в openweathermap
+    stmt = city.insert().values({"name": city_name})
     await session.execute(stmt)
     await session.commit()
     return {"status": "success"}
 
 
 @router.get("/last_weather/")
-async def get_last_weather(session: AsyncSession = Depends(get_async_session)):
-    query = select(weather)
-    result = await session.execute(query)
-    res = result.all()
-    return {"result": res}
+async def get_last_weather(
+    search: str = "", session: AsyncSession = Depends(get_async_session)
+):
+    # TODO: добавить фильтрацию по опциональному параметру search: where city_name like
+    qstr = "SELECT *\
+    FROM \
+    (SELECT id,\
+            city_id,\
+            TIME, \
+            temperature, \
+            pressure, \
+            wind, \
+            Row_number() OVER (PARTITION BY city_id \
+                                ORDER BY TIME DESC) AS r_num \
+    FROM public.weather) AS decorated \
+    WHERE r_num = 1"
+    result = await session.execute(text(qstr))
+    # res = result.all()
+    # print(res, type(res))
+    # return {"result": res}
+    return result.all()
 
 
 @router.get("/city_stats/")
@@ -48,7 +63,7 @@ async def get_city_stats(
         .where(city.c.name == city_name)
     )
     result = await session.execute(query)
-    print(city_name)
-    print(query)
+    # print(city_name)
+    # print(query)
     # print(result.all())
     return {"result": result.all()}
