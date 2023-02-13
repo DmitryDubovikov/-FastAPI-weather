@@ -50,5 +50,5 @@ async def get_city_stats(
     result = await session.execute(query)
     print(city_name)
     print(query)
-    print(result.all())
+    # print(result.all())
     return {"result": result.all()}
