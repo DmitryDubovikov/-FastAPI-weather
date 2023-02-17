@@ -22,23 +22,32 @@ async def add_city(city_name: str, session: AsyncSession = Depends(get_async_ses
 async def get_last_weather(
     search: str = "", session: AsyncSession = Depends(get_async_session)
 ):
-    # TODO: добавить фильтрацию по опциональному параметру search: where city_name like
-    qstr = "SELECT *\
-    FROM \
-    (SELECT id,\
-            city_id,\
-            TIME, \
-            temperature, \
-            pressure, \
-            wind, \
-            Row_number() OVER (PARTITION BY city_id \
-                                ORDER BY TIME DESC) AS r_num \
-    FROM public.weather) AS decorated \
-    WHERE r_num = 1"
+    qstr = """
+    SELECT *
+    FROM
+    (SELECT weather.id,
+            city_id,
+            city.name,
+            TIME,
+            temperature,
+            pressure,
+            wind,
+            Row_number() OVER (PARTITION BY city_id
+                                ORDER BY TIME DESC) AS r_num
+    FROM public.weather
+    INNER JOIN city ON city.id = weather.city_id
+    AND TRUE) AS decorated
+    WHERE r_num = 1
+    """
+    if search:
+        qstr = qstr.replace("AND TRUE", f"AND city.name like '%{search}%'")
+    else:
+        qstr = qstr.replace("AND TRUE", "")
     result = await session.execute(text(qstr))
     # res = result.all()
     # print(res, type(res))
     # return {"result": res}
+    print(result.all())
     return result.all()
 
 
@@ -66,4 +75,5 @@ async def get_city_stats(
     # print(city_name)
     # print(query)
     # print(result.all())
-    return {"result": result.all()}
+    # return {"result": result.all()}
+    return result.all()
